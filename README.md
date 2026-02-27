@@ -1,10 +1,10 @@
-# Dark Caves
+# DarkerCaves
 
 A BepInEx 5 mod for MineMogul that removes cave/mineshaft baked lighting and related brightening effects to keep underground areas consistently dark and immersive.
 
 ## Current Version
 
-`0.8.1`
+`1.0.0`
 
 ## What It Does
 

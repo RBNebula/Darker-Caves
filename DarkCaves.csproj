@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>DarkCaves</AssemblyName>
     <RootNamespace>DarkCaves</RootNamespace>
-    <Version>0.8.1</Version>
+    <Version>1.0.0</Version>
     <GameLibsDir Condition="'$(GameLibsDir)' == ''">..\Libs</GameLibsDir>
   </PropertyGroup>
 
