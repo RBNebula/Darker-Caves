@@ -8,6 +8,6 @@ internal static class SavingLoadingManagerLoadGamePatch
     [HarmonyPostfix]
     private static void LoadGamePostfix()
     {
-        DarkCavesPlugin.Instance?.QueuePostLoadImmediateStrip();
+        DarkCaves.Instance?.QueuePostLoadImmediateStrip();
     }
 }

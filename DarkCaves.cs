@@ -2,34 +2,28 @@ using BepInEx;
 using DarkCaves.Configuration;
 using DarkCaves.Domain;
 using HarmonyLib;
-using DarkCaves.Services;
 using UnityEngine.SceneManagement;
 
 namespace DarkCaves;
 
 [BepInPlugin(ModInfo.PLUGIN_GUID, ModInfo.PLUGIN_NAME, ModInfo.PLUGIN_VERSION)]
-public sealed class DarkCavesPlugin : BaseUnityPlugin
+public sealed class DarkCaves : BaseUnityPlugin
 {
-    internal static DarkCavesPlugin? Instance { get; private set; }
+    internal static DarkCaves? Instance { get; private set; }
 
-    private DarkCavesConfig? _config;
-    private SaveScopedRemovalTracker? _saveScopedRemovalTracker;
     private SceneStripCoordinator? _coordinator;
     private Harmony? _harmony;
 
     private void Awake()
     {
         Instance = this;
-        _config = new DarkCavesConfig(Config);
-        _saveScopedRemovalTracker = new SaveScopedRemovalTracker(_config, Logger);
-        SceneStripper stripper = new(_config, Logger);
-        _coordinator = new SceneStripCoordinator(this, Logger, _config, stripper, _saveScopedRemovalTracker);
+        DarkCavesConfig config = new();
+        SceneStripper stripper = new(Logger);
+        _coordinator = new SceneStripCoordinator(this, Logger, config, stripper);
         _harmony = new Harmony(ModInfo.HARMONY_ID);
-        _harmony.PatchAll(typeof(DarkCavesPlugin).Assembly);
+        _harmony.PatchAll(typeof(DarkCaves).Assembly);
 
         SceneManager.sceneLoaded += OnSceneLoaded;
-        Logger.LogInfo($"{ModInfo.LOG_PREFIX} {ModInfo.PLUGIN_NAME} {ModInfo.PLUGIN_VERSION} loaded.");
-
         _coordinator.QueueSceneStrip(SceneManager.GetActiveScene(), "awake");
     }
 
@@ -69,6 +63,6 @@ public sealed class DarkCavesPlugin : BaseUnityPlugin
 
     private bool CanRunAutomaticStrip()
     {
-        return _config != null && _coordinator != null && _config.Enabled;
+        return _coordinator != null;
     }
 }

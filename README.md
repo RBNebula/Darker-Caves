@@ -11,9 +11,12 @@ A BepInEx 5 mod for MineMogul that removes cave/mineshaft baked lighting and rel
 - Strips scene light sources using fixed, tuned defaults for this mod.
 - Clears baked lightmaps/light probes and re-applies clearing during scans.
 - Disables reflection probes and post-processing that can re-brighten scenes.
+- Removes emission from terrain materials/splat properties while avoiding broad global emission stripping.
+- Targets dust motes via explicit built-in dustmote naming rules (no configurable CSV keyword list).
 - Removes terrain/foliage visual artifacts that appear too bright in dark caves.
-- Preserves lantern/player light groups using keyword-based keep rules.
-- Supports one-time-per-save object removals via SavableObject IDs.
+- Excludes all `ISaveLoadableObject` hierarchies (SavableObject-based items/placeables, including modded IDs) from darkening/stripping targeting.
+- Excludes `InventoryItemPreview` hierarchies so inventory preview item colors remain unchanged.
+- Excludes player hierarchies (`PlayerController`) so equipment-driven lights (e.g. mining helmet toggle) still function.
 
 ## Requirements
 
@@ -65,21 +68,20 @@ Typical path:
 
 Plugin GUID:
 
-`com.main.darkcaves`
+`com.darkcaves`
 
-Config file:
+User-configurable settings:
 
-`<MineMogul>\BepInEx\config\com.main.darkcaves.cfg`
+- None. Behavior is fully hardcoded in this build.
 
-Only one setting is user-configurable:
+All SavableObject-based items/placeables (including modded IDs) are excluded from darkening/stripping targeting.
+Inventory previews (`InventoryItemPreview`) are also excluded from targeting.
+Player hierarchies (`PlayerController`) are also excluded from targeting.
 
-- `General.Enabled = true/false`
+No hardcoded per-object ID removals or lantern/player name-based keep targeting are used.
+Terrain handling now targets actual Unity `Terrain` components instead of terrain keyword/heuristic renderer matching.
 
-All other behavior is hardcoded to this final version's defaults.
-
-Save-scoped state file:
-
-`<MineMogul>\BepInEx\config\DarkCaves.saveScopedRemoval.state`
+All other behavior remains hardcoded to this version's defaults.
 
 ## Repository Notes
 

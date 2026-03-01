@@ -4,7 +4,6 @@ internal struct LightStripStats
 {
     public int Matched;
     public int Disabled;
-    public int Destroyed;
     public int DriverBehavioursDisabled;
 }
 
@@ -13,12 +12,6 @@ internal struct RendererStripStats
     public int LightmapCleared;
     public int LightProbeUsageDisabled;
     public int ReflectionProbeUsageDisabled;
-}
-
-internal struct EmissionStripStats
-{
-    public int RenderersModified;
-    public int MaterialsModified;
 }
 
 internal struct DustStripStats
@@ -32,8 +25,6 @@ internal struct DustStripStats
 internal struct TerrainStripStats
 {
     public int TerrainMaterialsDarkened;
-    public int TerrainRenderersDarkened;
-    public int TerrainSlotsDarkened;
     public int TerrainLightmapsCleared;
     public int TerrainRealtimeLightmapsCleared;
     public int TerrainReflectionProbeUsageDisabled;

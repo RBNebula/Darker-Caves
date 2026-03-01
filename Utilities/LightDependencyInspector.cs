@@ -5,31 +5,6 @@ namespace DarkCaves.Utilities;
 
 internal static class LightDependencyInspector
 {
-    public static bool HasLightDependencyOnSameGameObject(GameObject gameObject)
-    {
-        Component[] components = gameObject.GetComponents<Component>();
-        for (int i = 0; i < components.Length; i++)
-        {
-            Component component = components[i];
-            if (component == null || component is Light)
-            {
-                continue;
-            }
-
-            object[] attrs = component.GetType().GetCustomAttributes(typeof(RequireComponent), true);
-            for (int j = 0; j < attrs.Length; j++)
-            {
-                RequireComponent req = (RequireComponent)attrs[j];
-                if (RequiresLight(req))
-                {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
     public static bool RequiresLightByAttribute(Type type)
     {
         object[] attrs = type.GetCustomAttributes(typeof(RequireComponent), true);

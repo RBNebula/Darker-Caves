@@ -5,29 +5,12 @@ namespace DarkCaves.Utilities;
 
 internal static class SceneUtils
 {
-    public static bool IsIgnoredScene(string sceneName, string csv)
+    private const string IgnoredSceneName = "MainMenu";
+
+    public static bool IsIgnoredScene(string sceneName)
     {
-        if (string.IsNullOrWhiteSpace(sceneName) || string.IsNullOrWhiteSpace(csv))
-        {
-            return false;
-        }
-
-        string[] items = csv.Split(',');
-        for (int i = 0; i < items.Length; i++)
-        {
-            string item = items[i].Trim();
-            if (item.Length == 0)
-            {
-                continue;
-            }
-
-            if (sceneName.Equals(item, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return !string.IsNullOrWhiteSpace(sceneName) &&
+               sceneName.Equals(IgnoredSceneName, StringComparison.OrdinalIgnoreCase);
     }
 
     public static string GetSceneKey(Scene scene)

@@ -3,7 +3,6 @@ using System.Collections;
 using System.Collections.Generic;
 using BepInEx.Logging;
 using DarkCaves.Configuration;
-using DarkCaves.Services;
 using DarkCaves.Utilities;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -17,7 +16,6 @@ internal sealed class SceneStripCoordinator
     private readonly ManualLogSource _logger;
     private readonly DarkCavesConfig _config;
     private readonly SceneStripper _stripper;
-    private readonly SaveScopedRemovalTracker _saveScopedRemovalTracker;
     private readonly HashSet<string> _processedScenes = new(StringComparer.OrdinalIgnoreCase);
     private Coroutine? _stripRoutine;
 
@@ -25,14 +23,12 @@ internal sealed class SceneStripCoordinator
         MonoBehaviour host,
         ManualLogSource logger,
         DarkCavesConfig config,
-        SceneStripper stripper,
-        SaveScopedRemovalTracker saveScopedRemovalTracker)
+        SceneStripper stripper)
     {
         _host = host;
         _logger = logger;
         _config = config;
         _stripper = stripper;
-        _saveScopedRemovalTracker = saveScopedRemovalTracker;
     }
 
     public void Stop()
@@ -52,32 +48,24 @@ internal sealed class SceneStripCoordinator
         bool forceRescan = false,
         bool singlePass = false)
     {
-        if (!_config.Enabled)
-        {
-            return;
-        }
-
         if (!scene.IsValid() || !scene.isLoaded)
         {
             return;
         }
 
-        if (SceneUtils.IsIgnoredScene(scene.name, _config.IgnoreScenesCsv))
+        if (SceneUtils.IsIgnoredScene(scene.name))
         {
             _logger.LogInfo($"Skipping ignored scene '{scene.name}'.");
             return;
         }
 
         string sceneKey = SceneUtils.GetSceneKey(scene);
-        if (!forceRescan && _config.RunOncePerScene && _processedScenes.Contains(sceneKey))
+        if (!forceRescan && _processedScenes.Contains(sceneKey))
         {
             return;
         }
 
-        if (_config.RunOncePerScene)
-        {
-            _processedScenes.Add(sceneKey);
-        }
+        _processedScenes.Add(sceneKey);
 
         if (_stripRoutine != null)
         {
@@ -93,119 +81,42 @@ internal sealed class SceneStripCoordinator
         float interval = Mathf.Clamp(_config.ScanIntervalSeconds, 0.05f, 10f);
         int heavyInterval = Mathf.Max(1, _config.HeavyPassIntervalScans);
         float elapsed = 0f;
-        int scanCount = 0;
-        int totalLightMatches = 0;
-        int totalLightDisabled = 0;
-        int totalLightDestroyed = 0;
-        int lightDriverBehavioursDisabled = 0;
-        int disabledReflectionProbes = 0;
-        int projectorLikeComponentsDisabled = 0;
-        int rendererLightmapsCleared = 0;
-        int rendererLightProbeUsageDisabled = 0;
-        int rendererReflectionProbeUsageDisabled = 0;
-        int emissionRenderersModified = 0;
-        int emissionMaterialsModified = 0;
-        int dustParticleSystemsStopped = 0;
-        int dustParticleRenderersDisabled = 0;
-        int dustParticleLightsDisabled = 0;
-        int dustVisualEffectsDisabled = 0;
-        int terrainMaterialsDarkened = 0;
-        int terrainRenderersDarkened = 0;
-        int terrainSlotsDarkened = 0;
-        int terrainLightmapsCleared = 0;
-        int terrainRealtimeLightmapsCleared = 0;
-        int terrainReflectionProbeUsageDisabled = 0;
-        int terrainSplatPropertyBlocksApplied = 0;
-        int terrainFoliageSuppressed = 0;
-        int terrainDataGrassSuppressed = 0;
-        int saveScopedObjectsRemoved = 0;
-        int postProcessingDisabled = 0;
-        int totalLightmapSlotsCleared = 0;
-        int lightProbeClearOps = 0;
-        bool clearedBakedAtLeastOnce = false;
-        SaveScopedRemovalContext saveScopedContext = CreateSaveScopedRemovalContext();
+        StripRunStats stats = new();
 
         _logger.LogInfo($"Starting darkness pass for scene '{scene.name}' ({reason}).");
 
-        while (scene.isLoaded && (singlePass ? scanCount < 1 : elapsed <= totalDuration + 0.0001f))
+        while (scene.isLoaded && (singlePass ? stats.ScanCount < 1 : elapsed <= totalDuration + 0.0001f))
         {
-            scanCount++;
-            bool runHeavyPass = singlePass || scanCount == 1 || heavyInterval <= 1 || scanCount % heavyInterval == 0;
+            stats.ScanCount++;
+            bool runHeavyPass = singlePass ||
+                                stats.ScanCount == 1 ||
+                                heavyInterval <= 1 ||
+                                stats.ScanCount % heavyInterval == 0;
 
-            saveScopedObjectsRemoved += ApplySaveScopedRemovalIfNeeded(scene, saveScopedContext);
+            stats.AddLights(_stripper.StripLightsInScene(scene));
 
-            LightStripStats lightStats = _stripper.StripLightsInScene(scene);
-            totalLightMatches += lightStats.Matched;
-            totalLightDisabled += lightStats.Disabled;
-            totalLightDestroyed += lightStats.Destroyed;
-            lightDriverBehavioursDisabled += lightStats.DriverBehavioursDisabled;
-
-            if (_config.DisableReflectionProbes && runHeavyPass)
+            if (runHeavyPass)
             {
-                disabledReflectionProbes += _stripper.DisableReflectionProbesInScene(scene);
+                stats.ReflectionProbesDisabled += _stripper.DisableReflectionProbesInScene(scene);
             }
 
             RendererStripStats rendererStats = runHeavyPass ? _stripper.StripRendererLightingInScene(scene) : default;
-            rendererLightmapsCleared += rendererStats.LightmapCleared;
-            rendererLightProbeUsageDisabled += rendererStats.LightProbeUsageDisabled;
-            rendererReflectionProbeUsageDisabled += rendererStats.ReflectionProbeUsageDisabled;
+            stats.AddRenderer(rendererStats);
 
-            if (_config.StripMaterialEmission && runHeavyPass)
+            if (runHeavyPass)
             {
-                EmissionStripStats emissionStats = _stripper.StripMaterialEmissionInScene(scene);
-                emissionRenderersModified += emissionStats.RenderersModified;
-                emissionMaterialsModified += emissionStats.MaterialsModified;
+                stats.AddDust(_stripper.StripDustVisualsInScene(scene));
+                stats.ProjectorLikeComponentsDisabled += _stripper.DisableProjectorLikeComponentsInScene(scene);
+                stats.PostProcessingDisabled += _stripper.DisablePostProcessingInScene(scene);
             }
 
-            if ((_config.DisableDustParticleSystems || _config.DisableDustVisualEffects) && runHeavyPass)
-            {
-                DustStripStats dustStats = _stripper.StripDustVisualsInScene(scene);
-                dustParticleSystemsStopped += dustStats.ParticleSystemsStopped;
-                dustParticleRenderersDisabled += dustStats.ParticleRenderersDisabled;
-                dustParticleLightsDisabled += dustStats.ParticleLightsDisabled;
-                dustVisualEffectsDisabled += dustStats.VisualEffectsDisabled;
-            }
+            stats.AddTerrain(_stripper.StripTerrainInScene(scene));
 
-            if (_config.DisableProjectorLikeComponents && runHeavyPass)
-            {
-                projectorLikeComponentsDisabled += _stripper.DisableProjectorLikeComponentsInScene(scene);
-            }
-
-            if (_config.DarkenTerrainMaterials || _config.StripRendererLightmaps || _config.DisableRendererProbeUsage)
-            {
-                TerrainStripStats terrainStats = _stripper.StripTerrainInScene(
-                    scene,
-                    includeRendererPass: runHeavyPass && _config.DarkenTerrainMaterials);
-                terrainMaterialsDarkened += terrainStats.TerrainMaterialsDarkened;
-                terrainRenderersDarkened += terrainStats.TerrainRenderersDarkened;
-                terrainSlotsDarkened += terrainStats.TerrainSlotsDarkened;
-                terrainLightmapsCleared += terrainStats.TerrainLightmapsCleared;
-                terrainRealtimeLightmapsCleared += terrainStats.TerrainRealtimeLightmapsCleared;
-                terrainReflectionProbeUsageDisabled += terrainStats.TerrainReflectionProbeUsageDisabled;
-                terrainSplatPropertyBlocksApplied += terrainStats.TerrainSplatPropertyBlocksApplied;
-                terrainFoliageSuppressed += terrainStats.TerrainFoliageSuppressed;
-                terrainDataGrassSuppressed += terrainStats.TerrainDataGrassSuppressed;
-            }
-
-            if (_config.DisablePostProcessing && runHeavyPass)
-            {
-                postProcessingDisabled += _stripper.DisablePostProcessingInScene(scene);
-            }
-
-            if (_config.ClearBakedLightmaps && (!clearedBakedAtLeastOnce || (_config.ReapplyBakedClearEachScan && runHeavyPass)))
+            if (!stats.ClearedBakedAtLeastOnce || runHeavyPass)
             {
                 bool clearedProbesThisScan;
                 int clearedLightmapSlots = _stripper.TryClearBakedLighting(scene.name, out clearedProbesThisScan);
-                totalLightmapSlotsCleared += clearedLightmapSlots;
-                if (clearedProbesThisScan)
-                {
-                    lightProbeClearOps++;
-                }
-
-                if (clearedLightmapSlots > 0 || clearedProbesThisScan)
-                {
-                    clearedBakedAtLeastOnce = true;
-                }
+                stats.AddBakedLightingResult(clearedLightmapSlots, clearedProbesThisScan);
             }
 
             ApplyRenderSettings();
@@ -219,110 +130,108 @@ internal sealed class SceneStripCoordinator
             elapsed += interval;
         }
 
-        _logger.LogInfo(
-            $"Finished scene '{scene.name}' ({reason}) scans={scanCount}, lightsMatched={totalLightMatches}, lightsDisabled={totalLightDisabled}, lightsDestroyed={totalLightDestroyed}, " +
-            $"lightDriverScriptsOff={lightDriverBehavioursDisabled}, " +
-            $"reflectionProbesDisabled={disabledReflectionProbes}, rendererLightmapsCleared={rendererLightmapsCleared}, rendererLightProbeOff={rendererLightProbeUsageDisabled}, " +
-            $"rendererReflectionOff={rendererReflectionProbeUsageDisabled}, lightmapSlotsCleared={totalLightmapSlotsCleared}, lightProbeClearOps={lightProbeClearOps}, " +
-            $"emissionRenderers={emissionRenderersModified}, emissionMaterials={emissionMaterialsModified}, " +
-            $"dustStopped={dustParticleSystemsStopped}, dustRenderersOff={dustParticleRenderersDisabled}, dustParticleLightsOff={dustParticleLightsDisabled}, dustVfxOff={dustVisualEffectsDisabled}, " +
-            $"projectorsOff={projectorLikeComponentsDisabled}, " +
-            $"terrainMaterialsDarkened={terrainMaterialsDarkened}, terrainRenderersDarkened={terrainRenderersDarkened}, terrainSlotsDarkened={terrainSlotsDarkened}, " +
-            $"terrainLightmapsCleared={terrainLightmapsCleared}, terrainRealtimeLightmapsCleared={terrainRealtimeLightmapsCleared}, " +
-            $"terrainReflectionProbeOff={terrainReflectionProbeUsageDisabled}, terrainSplatBlocksApplied={terrainSplatPropertyBlocksApplied}, " +
-            $"terrainFoliageSuppressed={terrainFoliageSuppressed}, terrainDataGrassSuppressed={terrainDataGrassSuppressed}, " +
-            $"saveScopedObjectsRemoved={saveScopedObjectsRemoved}, " +
-            $"postProcessingDisabled={postProcessingDisabled}.");
-
-        MarkSaveScopedRemovalIfNeeded(saveScopedContext, saveScopedObjectsRemoved);
-
+        _logger.LogInfo(stats.BuildSummary(scene.name, reason));
         _stripRoutine = null;
     }
 
-    private SaveScopedRemovalContext CreateSaveScopedRemovalContext()
+    private static void ApplyRenderSettings()
     {
-        if (!_config.EnableSaveScopedOneTimeRemoval)
-        {
-            return SaveScopedRemovalContext.Disabled;
-        }
-
-        HashSet<int> targetIds = SavableObjectIdCsvParser.Parse(_config.SaveScopedRemoveIdsCsv);
-        if (targetIds.Count == 0)
-        {
-            return SaveScopedRemovalContext.Disabled;
-        }
-
-        string activeSaveKey = _saveScopedRemovalTracker.GetActiveSaveKey();
-        if (activeSaveKey.Length == 0 || _saveScopedRemovalTracker.HasProcessed(activeSaveKey))
-        {
-            return SaveScopedRemovalContext.Disabled;
-        }
-
-        return new SaveScopedRemovalContext(activeSaveKey, targetIds);
+        RenderSettings.ambientMode = AmbientMode.Flat;
+        RenderSettings.ambientLight = Color.black;
+        RenderSettings.ambientIntensity = 0f;
+        RenderSettings.reflectionIntensity = 0f;
+        RenderSettings.fog = false;
+        RenderSettings.skybox = null;
     }
 
-    private int ApplySaveScopedRemovalIfNeeded(Scene scene, SaveScopedRemovalContext context)
+    private sealed class StripRunStats
     {
-        if (!context.IsEnabled)
+        public int ScanCount;
+        public int TotalLightMatches;
+        public int TotalLightDisabled;
+        public int LightDriverBehavioursDisabled;
+        public int ReflectionProbesDisabled;
+        public int ProjectorLikeComponentsDisabled;
+        public int RendererLightmapsCleared;
+        public int RendererLightProbeUsageDisabled;
+        public int RendererReflectionProbeUsageDisabled;
+        public int DustParticleSystemsStopped;
+        public int DustParticleRenderersDisabled;
+        public int DustParticleLightsDisabled;
+        public int DustVisualEffectsDisabled;
+        public int TerrainMaterialsDarkened;
+        public int TerrainLightmapsCleared;
+        public int TerrainRealtimeLightmapsCleared;
+        public int TerrainReflectionProbeUsageDisabled;
+        public int TerrainSplatPropertyBlocksApplied;
+        public int TerrainFoliageSuppressed;
+        public int TerrainDataGrassSuppressed;
+        public int PostProcessingDisabled;
+        public int TotalLightmapSlotsCleared;
+        public int LightProbeClearOps;
+        public bool ClearedBakedAtLeastOnce;
+
+        public void AddLights(LightStripStats lightStats)
         {
-            return 0;
+            TotalLightMatches += lightStats.Matched;
+            TotalLightDisabled += lightStats.Disabled;
+            LightDriverBehavioursDisabled += lightStats.DriverBehavioursDisabled;
         }
 
-        return _stripper.RemoveSaveScopedObjectsInScene(scene, context.TargetIds);
-    }
-
-    private void MarkSaveScopedRemovalIfNeeded(SaveScopedRemovalContext context, int removedCount)
-    {
-        if (!context.IsEnabled)
+        public void AddRenderer(RendererStripStats rendererStats)
         {
-            return;
+            RendererLightmapsCleared += rendererStats.LightmapCleared;
+            RendererLightProbeUsageDisabled += rendererStats.LightProbeUsageDisabled;
+            RendererReflectionProbeUsageDisabled += rendererStats.ReflectionProbeUsageDisabled;
         }
 
-        bool marked = _saveScopedRemovalTracker.MarkProcessed(context.SaveKey);
-        _logger.LogInfo(
-            $"Save-scoped one-time removal {(marked ? "completed" : "already-complete")} for save '{context.SaveKey}': " +
-            $"removed={removedCount}, ids='{_config.SaveScopedRemoveIdsCsv}'.");
-    }
-
-    private void ApplyRenderSettings()
-    {
-        if (_config.ForceAmbientBlack)
+        public void AddDust(DustStripStats dustStats)
         {
-            RenderSettings.ambientMode = AmbientMode.Flat;
-            RenderSettings.ambientLight = Color.black;
-            RenderSettings.ambientIntensity = 0f;
+            DustParticleSystemsStopped += dustStats.ParticleSystemsStopped;
+            DustParticleRenderersDisabled += dustStats.ParticleRenderersDisabled;
+            DustParticleLightsDisabled += dustStats.ParticleLightsDisabled;
+            DustVisualEffectsDisabled += dustStats.VisualEffectsDisabled;
         }
 
-        if (_config.ZeroReflectionIntensity)
+        public void AddTerrain(TerrainStripStats terrainStats)
         {
-            RenderSettings.reflectionIntensity = 0f;
+            TerrainMaterialsDarkened += terrainStats.TerrainMaterialsDarkened;
+            TerrainLightmapsCleared += terrainStats.TerrainLightmapsCleared;
+            TerrainRealtimeLightmapsCleared += terrainStats.TerrainRealtimeLightmapsCleared;
+            TerrainReflectionProbeUsageDisabled += terrainStats.TerrainReflectionProbeUsageDisabled;
+            TerrainSplatPropertyBlocksApplied += terrainStats.TerrainSplatPropertyBlocksApplied;
+            TerrainFoliageSuppressed += terrainStats.TerrainFoliageSuppressed;
+            TerrainDataGrassSuppressed += terrainStats.TerrainDataGrassSuppressed;
         }
 
-        if (_config.DisableFog)
+        public void AddBakedLightingResult(int clearedLightmapSlots, bool clearedProbesThisScan)
         {
-            RenderSettings.fog = false;
+            TotalLightmapSlotsCleared += clearedLightmapSlots;
+            if (clearedProbesThisScan)
+            {
+                LightProbeClearOps++;
+            }
+
+            if (clearedLightmapSlots > 0 || clearedProbesThisScan)
+            {
+                ClearedBakedAtLeastOnce = true;
+            }
         }
 
-        if (_config.DisableSkybox)
+        public string BuildSummary(string sceneName, string reason)
         {
-            RenderSettings.skybox = null;
+            return
+                $"Finished scene '{sceneName}' ({reason}) scans={ScanCount}, lightsMatched={TotalLightMatches}, lightsDisabled={TotalLightDisabled}, " +
+                $"lightDriverScriptsOff={LightDriverBehavioursDisabled}, " +
+                $"reflectionProbesDisabled={ReflectionProbesDisabled}, rendererLightmapsCleared={RendererLightmapsCleared}, rendererLightProbeOff={RendererLightProbeUsageDisabled}, " +
+                $"rendererReflectionOff={RendererReflectionProbeUsageDisabled}, lightmapSlotsCleared={TotalLightmapSlotsCleared}, lightProbeClearOps={LightProbeClearOps}, " +
+                $"dustStopped={DustParticleSystemsStopped}, dustRenderersOff={DustParticleRenderersDisabled}, dustParticleLightsOff={DustParticleLightsDisabled}, dustVfxOff={DustVisualEffectsDisabled}, " +
+                $"projectorsOff={ProjectorLikeComponentsDisabled}, " +
+                $"terrainMaterialsDarkened={TerrainMaterialsDarkened}, " +
+                $"terrainLightmapsCleared={TerrainLightmapsCleared}, terrainRealtimeLightmapsCleared={TerrainRealtimeLightmapsCleared}, " +
+                $"terrainReflectionProbeOff={TerrainReflectionProbeUsageDisabled}, terrainSplatBlocksApplied={TerrainSplatPropertyBlocksApplied}, " +
+                $"terrainFoliageSuppressed={TerrainFoliageSuppressed}, terrainDataGrassSuppressed={TerrainDataGrassSuppressed}, " +
+                $"postProcessingDisabled={PostProcessingDisabled}.";
         }
-    }
-
-    private readonly struct SaveScopedRemovalContext
-    {
-        public static SaveScopedRemovalContext Disabled => new(string.Empty, _emptySet);
-
-        private static readonly HashSet<int> _emptySet = new();
-
-        public SaveScopedRemovalContext(string saveKey, HashSet<int> targetIds)
-        {
-            SaveKey = saveKey;
-            TargetIds = targetIds;
-        }
-
-        public string SaveKey { get; }
-        public HashSet<int> TargetIds { get; }
-        public bool IsEnabled => SaveKey.Length > 0 && TargetIds.Count > 0;
     }
 }
