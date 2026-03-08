@@ -5,34 +5,47 @@
     <Nullable>enable</Nullable>
     <AssemblyName>DarkCaves</AssemblyName>
     <RootNamespace>DarkCaves</RootNamespace>
-    <Version>1.0.0</Version>
-    <GameLibsDir Condition="'$(GameLibsDir)' == ''">..\Libs</GameLibsDir>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <MineMogulDir Condition="'$(MineMogulDir)' == ''">F:\SteamLibrary\steamapps\common\MineMogul</MineMogulDir>
+    <MineMogulManagedDir>$(MineMogulDir)\MineMogul_Data\Managed</MineMogulManagedDir>
+    <MineMogulBepInExCoreDir>$(MineMogulDir)\BepInEx\core</MineMogulBepInExCoreDir>
+    <MineMogulPluginsDir>$(MineMogulDir)\BepInEx\plugins</MineMogulPluginsDir>
   </PropertyGroup>
 
   <ItemGroup>
     <Reference Include="0Harmony">
-      <HintPath>$(GameLibsDir)\0Harmony.dll</HintPath>
+      <HintPath>$(MineMogulBepInExCoreDir)\0Harmony.dll</HintPath>
+      <Private>false</Private>
     </Reference>
     <Reference Include="BepInEx">
-      <HintPath>$(GameLibsDir)\BepInEx.dll</HintPath>
+      <HintPath>$(MineMogulBepInExCoreDir)\BepInEx.dll</HintPath>
+      <Private>false</Private>
     </Reference>
     <Reference Include="Assembly-CSharp">
-      <HintPath>$(GameLibsDir)\Assembly-CSharp.dll</HintPath>
+      <HintPath>$(MineMogulManagedDir)\Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine">
-      <HintPath>$(GameLibsDir)\UnityEngine.dll</HintPath>
+      <HintPath>$(MineMogulManagedDir)\UnityEngine.dll</HintPath>
+      <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.CoreModule">
-      <HintPath>$(GameLibsDir)\UnityEngine.CoreModule.dll</HintPath>
+      <HintPath>$(MineMogulManagedDir)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.ParticleSystemModule">
-      <HintPath>$(GameLibsDir)\UnityEngine.ParticleSystemModule.dll</HintPath>
+      <HintPath>$(MineMogulManagedDir)\UnityEngine.ParticleSystemModule.dll</HintPath>
+      <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.TerrainModule">
-      <HintPath>$(GameLibsDir)\UnityEngine.TerrainModule.dll</HintPath>
+      <HintPath>$(MineMogulManagedDir)\UnityEngine.TerrainModule.dll</HintPath>
+      <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.InputLegacyModule">
-      <HintPath>$(GameLibsDir)\UnityEngine.InputLegacyModule.dll</HintPath>
+      <HintPath>$(MineMogulManagedDir)\UnityEngine.InputLegacyModule.dll</HintPath>
+      <Private>false</Private>
     </Reference>
   </ItemGroup>
 </Project>

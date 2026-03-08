@@ -1,4 +1,4 @@
-namespace DarkCaves.Domain;
+namespace DarkCaves.Core;
 
 internal struct LightStripStats
 {
@@ -11,7 +11,7 @@ internal struct RendererStripStats
 {
     public int LightmapCleared;
     public int LightProbeUsageDisabled;
-    public int ReflectionProbeUsageDisabled;
+    public int PlaneRenderersDisabled;
 }
 
 internal struct DustStripStats
@@ -27,8 +27,8 @@ internal struct TerrainStripStats
     public int TerrainMaterialsDarkened;
     public int TerrainLightmapsCleared;
     public int TerrainRealtimeLightmapsCleared;
-    public int TerrainReflectionProbeUsageDisabled;
     public int TerrainSplatPropertyBlocksApplied;
     public int TerrainFoliageSuppressed;
     public int TerrainDataGrassSuppressed;
 }
+

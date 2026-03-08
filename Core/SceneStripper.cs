@@ -1,6 +1,6 @@
 using BepInEx.Logging;
 
-namespace DarkCaves.Domain;
+namespace DarkCaves.Core;
 
 internal sealed partial class SceneStripper
 {
@@ -22,3 +22,4 @@ internal sealed partial class SceneStripper
         _logger = logger;
     }
 }
+

@@ -2,13 +2,13 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using BepInEx.Logging;
-using DarkCaves.Configuration;
+using DarkCaves.Config;
 using DarkCaves.Utilities;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
 
-namespace DarkCaves.Domain;
+namespace DarkCaves.Core;
 
 internal sealed class SceneStripCoordinator
 {
@@ -55,7 +55,7 @@ internal sealed class SceneStripCoordinator
 
         if (SceneUtils.IsIgnoredScene(scene.name))
         {
-            _logger.LogInfo($"Skipping ignored scene '{scene.name}'.");
+            _logger.LogInfo($"{ModInfo.LOG_PREFIX} Skipping ignored scene '{scene.name}'.");
             return;
         }
 
@@ -83,7 +83,7 @@ internal sealed class SceneStripCoordinator
         float elapsed = 0f;
         StripRunStats stats = new();
 
-        _logger.LogInfo($"Starting darkness pass for scene '{scene.name}' ({reason}).");
+        _logger.LogInfo($"{ModInfo.LOG_PREFIX} Starting darkness pass for scene '{scene.name}' ({reason}).");
 
         while (scene.isLoaded && (singlePass ? stats.ScanCount < 1 : elapsed <= totalDuration + 0.0001f))
         {
@@ -95,18 +95,12 @@ internal sealed class SceneStripCoordinator
 
             stats.AddLights(_stripper.StripLightsInScene(scene));
 
-            if (runHeavyPass)
-            {
-                stats.ReflectionProbesDisabled += _stripper.DisableReflectionProbesInScene(scene);
-            }
-
             RendererStripStats rendererStats = runHeavyPass ? _stripper.StripRendererLightingInScene(scene) : default;
             stats.AddRenderer(rendererStats);
 
             if (runHeavyPass)
             {
                 stats.AddDust(_stripper.StripDustVisualsInScene(scene));
-                stats.ProjectorLikeComponentsDisabled += _stripper.DisableProjectorLikeComponentsInScene(scene);
                 stats.PostProcessingDisabled += _stripper.DisablePostProcessingInScene(scene);
             }
 
@@ -130,7 +124,7 @@ internal sealed class SceneStripCoordinator
             elapsed += interval;
         }
 
-        _logger.LogInfo(stats.BuildSummary(scene.name, reason));
+        _logger.LogInfo($"{ModInfo.LOG_PREFIX} {stats.BuildSummary(scene.name, reason)}");
         _stripRoutine = null;
     }
 
@@ -139,7 +133,6 @@ internal sealed class SceneStripCoordinator
         RenderSettings.ambientMode = AmbientMode.Flat;
         RenderSettings.ambientLight = Color.black;
         RenderSettings.ambientIntensity = 0f;
-        RenderSettings.reflectionIntensity = 0f;
         RenderSettings.fog = false;
         RenderSettings.skybox = null;
     }
@@ -150,11 +143,9 @@ internal sealed class SceneStripCoordinator
         public int TotalLightMatches;
         public int TotalLightDisabled;
         public int LightDriverBehavioursDisabled;
-        public int ReflectionProbesDisabled;
-        public int ProjectorLikeComponentsDisabled;
         public int RendererLightmapsCleared;
         public int RendererLightProbeUsageDisabled;
-        public int RendererReflectionProbeUsageDisabled;
+        public int PlaneRenderersDisabled;
         public int DustParticleSystemsStopped;
         public int DustParticleRenderersDisabled;
         public int DustParticleLightsDisabled;
@@ -162,7 +153,6 @@ internal sealed class SceneStripCoordinator
         public int TerrainMaterialsDarkened;
         public int TerrainLightmapsCleared;
         public int TerrainRealtimeLightmapsCleared;
-        public int TerrainReflectionProbeUsageDisabled;
         public int TerrainSplatPropertyBlocksApplied;
         public int TerrainFoliageSuppressed;
         public int TerrainDataGrassSuppressed;
@@ -182,7 +172,7 @@ internal sealed class SceneStripCoordinator
         {
             RendererLightmapsCleared += rendererStats.LightmapCleared;
             RendererLightProbeUsageDisabled += rendererStats.LightProbeUsageDisabled;
-            RendererReflectionProbeUsageDisabled += rendererStats.ReflectionProbeUsageDisabled;
+            PlaneRenderersDisabled += rendererStats.PlaneRenderersDisabled;
         }
 
         public void AddDust(DustStripStats dustStats)
@@ -198,7 +188,6 @@ internal sealed class SceneStripCoordinator
             TerrainMaterialsDarkened += terrainStats.TerrainMaterialsDarkened;
             TerrainLightmapsCleared += terrainStats.TerrainLightmapsCleared;
             TerrainRealtimeLightmapsCleared += terrainStats.TerrainRealtimeLightmapsCleared;
-            TerrainReflectionProbeUsageDisabled += terrainStats.TerrainReflectionProbeUsageDisabled;
             TerrainSplatPropertyBlocksApplied += terrainStats.TerrainSplatPropertyBlocksApplied;
             TerrainFoliageSuppressed += terrainStats.TerrainFoliageSuppressed;
             TerrainDataGrassSuppressed += terrainStats.TerrainDataGrassSuppressed;
@@ -223,15 +212,15 @@ internal sealed class SceneStripCoordinator
             return
                 $"Finished scene '{sceneName}' ({reason}) scans={ScanCount}, lightsMatched={TotalLightMatches}, lightsDisabled={TotalLightDisabled}, " +
                 $"lightDriverScriptsOff={LightDriverBehavioursDisabled}, " +
-                $"reflectionProbesDisabled={ReflectionProbesDisabled}, rendererLightmapsCleared={RendererLightmapsCleared}, rendererLightProbeOff={RendererLightProbeUsageDisabled}, " +
-                $"rendererReflectionOff={RendererReflectionProbeUsageDisabled}, lightmapSlotsCleared={TotalLightmapSlotsCleared}, lightProbeClearOps={LightProbeClearOps}, " +
+                $"rendererLightmapsCleared={RendererLightmapsCleared}, rendererLightProbeOff={RendererLightProbeUsageDisabled}, planeRenderersOff={PlaneRenderersDisabled}, " +
+                $"lightmapSlotsCleared={TotalLightmapSlotsCleared}, lightProbeClearOps={LightProbeClearOps}, " +
                 $"dustStopped={DustParticleSystemsStopped}, dustRenderersOff={DustParticleRenderersDisabled}, dustParticleLightsOff={DustParticleLightsDisabled}, dustVfxOff={DustVisualEffectsDisabled}, " +
-                $"projectorsOff={ProjectorLikeComponentsDisabled}, " +
                 $"terrainMaterialsDarkened={TerrainMaterialsDarkened}, " +
                 $"terrainLightmapsCleared={TerrainLightmapsCleared}, terrainRealtimeLightmapsCleared={TerrainRealtimeLightmapsCleared}, " +
-                $"terrainReflectionProbeOff={TerrainReflectionProbeUsageDisabled}, terrainSplatBlocksApplied={TerrainSplatPropertyBlocksApplied}, " +
+                $"terrainSplatBlocksApplied={TerrainSplatPropertyBlocksApplied}, " +
                 $"terrainFoliageSuppressed={TerrainFoliageSuppressed}, terrainDataGrassSuppressed={TerrainDataGrassSuppressed}, " +
                 $"postProcessingDisabled={PostProcessingDisabled}.";
         }
     }
 }
+

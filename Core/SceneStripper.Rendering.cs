@@ -2,8 +2,9 @@ using DarkCaves.Utilities;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
+using System;
 
-namespace DarkCaves.Domain;
+namespace DarkCaves.Core;
 
 internal sealed partial class SceneStripper
 {
@@ -43,42 +44,6 @@ internal sealed partial class SceneStripper
         return count;
     }
 
-    public int DisableProjectorLikeComponentsInScene(Scene scene)
-    {
-        GameObject[] roots = scene.GetRootGameObjects();
-        int count = 0;
-
-        for (int i = 0; i < roots.Length; i++)
-        {
-            GameObject root = roots[i];
-            if (root == null)
-            {
-                continue;
-            }
-
-            Behaviour[] behaviours = root.GetComponentsInChildren<Behaviour>(true);
-            for (int j = 0; j < behaviours.Length; j++)
-            {
-                Behaviour behaviour = behaviours[j];
-                if (behaviour == null || !behaviour.enabled || IsExcludedFromTargeting(behaviour.transform))
-                {
-                    continue;
-                }
-
-                string fullName = behaviour.GetType().FullName ?? behaviour.GetType().Name;
-                if (!ComponentTypeFilters.IsProjectorLikeComponent(fullName))
-                {
-                    continue;
-                }
-
-                behaviour.enabled = false;
-                count++;
-            }
-        }
-
-        return count;
-    }
-
     public RendererStripStats StripRendererLightingInScene(Scene scene)
     {
         RendererStripStats stats = default;
@@ -100,6 +65,17 @@ internal sealed partial class SceneStripper
                     continue;
                 }
 
+                if (ShouldDisablePlaneRenderer(renderer.transform))
+                {
+                    if (renderer.enabled)
+                    {
+                        renderer.enabled = false;
+                        stats.PlaneRenderersDisabled++;
+                    }
+
+                    continue;
+                }
+
                 if (renderer.lightmapIndex >= 0)
                 {
                     renderer.lightmapIndex = -1;
@@ -117,15 +93,50 @@ internal sealed partial class SceneStripper
                     renderer.lightProbeUsage = LightProbeUsage.Off;
                     stats.LightProbeUsageDisabled++;
                 }
-
-                if (renderer.reflectionProbeUsage != ReflectionProbeUsage.Off)
-                {
-                    renderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
-                    stats.ReflectionProbeUsageDisabled++;
-                }
             }
         }
 
         return stats;
     }
+
+    private static bool ShouldDisablePlaneRenderer(Transform? transform)
+    {
+        Transform? current = transform;
+        while (current != null)
+        {
+            if (IsPlaneName(current.name))
+            {
+                return true;
+            }
+
+            current = current.parent;
+        }
+
+        return false;
+    }
+
+    private static bool IsPlaneName(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        string name = value!.Trim();
+        if (name.Equals("Plane", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (name.StartsWith("Plane ", StringComparison.OrdinalIgnoreCase) ||
+            name.StartsWith("Plane(", StringComparison.OrdinalIgnoreCase) ||
+            name.StartsWith("Plane_", StringComparison.OrdinalIgnoreCase) ||
+            name.StartsWith("Plane-", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return false;
+    }
 }
+

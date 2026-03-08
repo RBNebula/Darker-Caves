@@ -1,4 +1,4 @@
-namespace DarkCaves.Configuration;
+namespace DarkCaves.Config;
 
 internal sealed class DarkCavesConfig
 {
@@ -6,3 +6,4 @@ internal sealed class DarkCavesConfig
     public float ScanIntervalSeconds => 0.5f;
     public int HeavyPassIntervalScans => 8;
 }
+

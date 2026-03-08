@@ -3,7 +3,7 @@ using DarkCaves.Utilities;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace DarkCaves.Domain;
+namespace DarkCaves.Core;
 
 internal sealed partial class SceneStripper
 {
@@ -29,6 +29,11 @@ internal sealed partial class SceneStripper
                     continue;
                 }
 
+                if (ShouldPreserveLightForWaterCaustics(light))
+                {
+                    continue;
+                }
+
                 stats.Matched++;
                 stats.DriverBehavioursDisabled += DisableLightDriverBehaviours(light.gameObject);
                 if (!light.enabled &&
@@ -50,40 +55,57 @@ internal sealed partial class SceneStripper
         return stats;
     }
 
-    public int DisableReflectionProbesInScene(Scene scene)
+    private static bool ShouldPreserveLightForWaterCaustics(Light light)
     {
-        GameObject[] roots = scene.GetRootGameObjects();
-        int count = 0;
-
-        for (int i = 0; i < roots.Length; i++)
+        if (HasComponentTypeName(light.gameObject, "CookieFlipbook"))
         {
-            GameObject root = roots[i];
-            if (root == null)
+            return true;
+        }
+
+        if (light.cookie == null)
+        {
+            return false;
+        }
+
+        if (ContainsWaterToken(light.name))
+        {
+            return true;
+        }
+
+        Transform? current = light.transform;
+        while (current != null)
+        {
+            if (ContainsWaterToken(current.name))
+            {
+                return true;
+            }
+
+            current = current.parent;
+        }
+
+        return false;
+    }
+
+    private static bool HasComponentTypeName(GameObject gameObject, string typeNameContains)
+    {
+        Component[] components = gameObject.GetComponents<Component>();
+        for (int i = 0; i < components.Length; i++)
+        {
+            Component component = components[i];
+            if (component == null)
             {
                 continue;
             }
 
-            ReflectionProbe[] probes = root.GetComponentsInChildren<ReflectionProbe>(true);
-            for (int j = 0; j < probes.Length; j++)
+            Type type = component.GetType();
+            string fullName = type.FullName ?? type.Name;
+            if (fullName.IndexOf(typeNameContains, StringComparison.OrdinalIgnoreCase) >= 0)
             {
-                ReflectionProbe probe = probes[j];
-                if (probe == null || IsExcludedFromTargeting(probe.transform))
-                {
-                    continue;
-                }
-
-                if (!probe.enabled && Mathf.Approximately(probe.intensity, 0f))
-                {
-                    continue;
-                }
-
-                probe.enabled = false;
-                probe.intensity = 0f;
-                count++;
+                return true;
             }
         }
 
-        return count;
+        return false;
     }
 
     private int DisableLightDriverBehaviours(GameObject gameObject)
@@ -117,3 +139,4 @@ internal sealed partial class SceneStripper
         return count;
     }
 }
+

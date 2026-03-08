@@ -2,7 +2,7 @@ using System;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace DarkCaves.Domain;
+namespace DarkCaves.Core;
 
 internal sealed partial class SceneStripper
 {
@@ -148,3 +148,4 @@ internal sealed partial class SceneStripper
         return false;
     }
 }
+

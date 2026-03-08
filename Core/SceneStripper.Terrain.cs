@@ -4,7 +4,7 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
 
-namespace DarkCaves.Domain;
+namespace DarkCaves.Core;
 
 internal sealed partial class SceneStripper
 {
@@ -40,12 +40,6 @@ internal sealed partial class SceneStripper
                 {
                     terrain.realtimeLightmapIndex = -1;
                     stats.TerrainRealtimeLightmapsCleared++;
-                }
-
-                if (terrain.reflectionProbeUsage != ReflectionProbeUsage.Off)
-                {
-                    terrain.reflectionProbeUsage = ReflectionProbeUsage.Off;
-                    stats.TerrainReflectionProbeUsageDisabled++;
                 }
 
                 bool terrainDataChanged;
@@ -94,7 +88,7 @@ internal sealed partial class SceneStripper
         }
         catch (Exception ex)
         {
-            _logger.LogWarning($"Failed to clear baked lighting in '{sceneName}': {ex.Message}");
+            _logger.LogWarning($"{ModInfo.LOG_PREFIX} Failed to clear baked lighting in '{sceneName}': {ex.Message}");
             return 0;
         }
     }
@@ -213,7 +207,7 @@ internal sealed partial class SceneStripper
         }
         catch (Exception ex)
         {
-            _logger.LogWarning($"Terrain foliage suppression failed on terrain '{terrain.name}': {ex.Message}");
+            _logger.LogWarning($"{ModInfo.LOG_PREFIX} Terrain foliage suppression failed on terrain '{terrain.name}': {ex.Message}");
             return false;
         }
 
@@ -236,7 +230,7 @@ internal sealed partial class SceneStripper
         }
         catch (Exception ex)
         {
-            _logger.LogWarning($"Terrain splat darken failed on terrain '{terrain.name}' scene='{sceneName}': {ex.Message}");
+            _logger.LogWarning($"{ModInfo.LOG_PREFIX} Terrain splat darken failed on terrain '{terrain.name}' scene='{sceneName}': {ex.Message}");
             return false;
         }
     }
@@ -256,3 +250,4 @@ internal sealed partial class SceneStripper
         return changed;
     }
 }
+
